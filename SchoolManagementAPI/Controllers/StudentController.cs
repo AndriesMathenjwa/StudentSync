@@ -4,6 +4,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Data.SqlClient;
 using SchoolManagementAPI.Models;
 using System;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 
 namespace SchoolManagementAPI.Controllers
 {
@@ -29,7 +33,7 @@ namespace SchoolManagementAPI.Controllers
                     con.Open();
 
                     // Check if the username or email already exists
-                    using (SqlCommand checkCmd = new SqlCommand("SELECT COUNT(*) FROM Parents WHERE Username=@Username OR Email=@Email", con))
+                    using (SqlCommand checkCmd = new SqlCommand("SELECT COUNT(*) FROM Parent WHERE Username=@Username OR Email=@Email", con))
                     {
                         checkCmd.Parameters.AddWithValue("@Username", student.Username);
                         checkCmd.Parameters.AddWithValue("@Email", student.Email);
@@ -41,7 +45,7 @@ namespace SchoolManagementAPI.Controllers
                         }
                     }
 
-                    using (SqlCommand cmd = new SqlCommand("INSERT INTO Students (IdNumber, FirstName, LastName, Email, DateOfBirth, Sex, StudentNumber, ProfilePicture, Grade, Username, Password) VALUES (@IdNumber, @FirstName, @LastName, @Email, @DOB, @Sex, @StudentNumber, @ProfilePicture, @Grade, @Username, @Password)", con))
+                    using (SqlCommand cmd = new SqlCommand("INSERT INTO Student (IdNumber, FirstName, LastName, Email, DateOfBirth, Sex, StudentNumber, ProfilePicture, Grade, Username, Password, ParentId) VALUES (@IdNumber, @FirstName, @LastName, @Email, @DOB, @Sex, @StudentNumber, @ProfilePicture, @Grade, @Username, @Password, @ParentId)", con))
                     {
                         cmd.Parameters.AddWithValue("@IdNumber", student.IdNumber);
                         cmd.Parameters.AddWithValue("@FirstName", student.FirstName);
@@ -54,6 +58,7 @@ namespace SchoolManagementAPI.Controllers
                         cmd.Parameters.AddWithValue("@Grade", student.Grade);
                         cmd.Parameters.AddWithValue("@Username", student.Username);
                         cmd.Parameters.AddWithValue("@Password", BCrypt.Net.BCrypt.HashPassword(student.Password));
+                        cmd.Parameters.AddWithValue("ParentId", student.ParentId);
 
                         int rowsAffected = cmd.ExecuteNonQuery();
                         if (rowsAffected > 0)
@@ -82,7 +87,7 @@ namespace SchoolManagementAPI.Controllers
                 using (SqlConnection con = new SqlConnection(connectionString))
                 {
                     con.Open();
-                    using (SqlCommand cmd = new SqlCommand("SELECT Id, Password FROM Students WHERE Username=@Username", con))
+                    using (SqlCommand cmd = new SqlCommand("SELECT Id, Password FROM Student WHERE Username=@Username", con))
                     {
                         cmd.Parameters.AddWithValue("@Username", loginModel.Username);
 
@@ -93,7 +98,14 @@ namespace SchoolManagementAPI.Controllers
                                 string storedHash = reader["Password"].ToString();
                                 if (BCrypt.Net.BCrypt.Verify(loginModel.Password, storedHash))
                                 {
-                                    return Ok("Student login successful.");
+                                    Student student = new Student
+                                    {
+                                        Id = Convert.ToInt32(reader["Id"]),
+                                        Username = loginModel.Username
+                                    };
+
+                                    string token = CreateToken(student);
+                                    return Ok(new { message ="successful loggedin", token });
                                 }
                                 else
                                 {
@@ -112,6 +124,24 @@ namespace SchoolManagementAPI.Controllers
             {
                 return StatusCode(StatusCodes.Status500InternalServerError, "Error: " + ex.Message);
             }
+        }
+        private string CreateToken(Student student)
+        {
+            List<Claim> claims = new List<Claim> {
+                new Claim(ClaimTypes.Name, student.Username)
+            };
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration.GetSection("AppSettings:Token").Value));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
+
+            var token = new JwtSecurityToken(
+                claims: claims,
+                expires: DateTime.Now.AddDays(1),
+                signingCredentials: creds
+            );
+
+            var jwt = new JwtSecurityTokenHandler().WriteToken(token);
+            return jwt;
         }
     }
 }

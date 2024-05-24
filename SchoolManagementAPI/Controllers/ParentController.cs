@@ -4,6 +4,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Data.SqlClient;
 using SchoolManagementAPI.Models;
 using System;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 
 namespace SchoolManagementAPI.Controllers
 {
@@ -29,7 +33,7 @@ namespace SchoolManagementAPI.Controllers
                     con.Open();
 
                     // Check if the username or email already exists
-                    using (SqlCommand checkCmd = new SqlCommand("SELECT COUNT(*) FROM Parents WHERE Username=@Username OR Email=@Email", con))
+                    using (SqlCommand checkCmd = new SqlCommand("SELECT COUNT(*) FROM Parent WHERE Username=@Username OR Email=@Email", con))
                     {
                         checkCmd.Parameters.AddWithValue("@Username", parent.Username);
                         checkCmd.Parameters.AddWithValue("@Email", parent.Email);
@@ -41,8 +45,9 @@ namespace SchoolManagementAPI.Controllers
                         }
                     }
 
-                    using (SqlCommand cmd = new SqlCommand("INSERT INTO Parents (FirstName, LastName, Email, RelationshipToStudent, ContactDetails, Address, Username, Password) VALUES (@FirstName, @LastName, @Email, @RelationshipToStudent, @ContactDetails, @Address, @Username, @Password)", con))
+                    using (SqlCommand cmd = new SqlCommand("INSERT INTO Parent (ParentIdNumber, FirstName, LastName, Email, RelationshipToStudent, ContactDetails, Address, Username, Password) VALUES (@ParentIdNumber, @FirstName, @LastName, @Email, @RelationshipToStudent, @ContactDetails, @Address, @Username, @Password)", con))
                     {
+                        cmd.Parameters.AddWithValue("@ParentIdNumber", parent.ParentIdNumber);
                         cmd.Parameters.AddWithValue("@FirstName", parent.FirstName);
                         cmd.Parameters.AddWithValue("@LastName", parent.LastName);
                         cmd.Parameters.AddWithValue("@Email", parent.Email);
@@ -79,7 +84,7 @@ namespace SchoolManagementAPI.Controllers
                 using (SqlConnection con = new SqlConnection(connectionString))
                 {
                     con.Open();
-                    using (SqlCommand cmd = new SqlCommand("SELECT Id, Password FROM Parents WHERE Username=@Username", con))
+                    using (SqlCommand cmd = new SqlCommand("SELECT Id, Password FROM Parent WHERE Username=@Username", con))
                     {
                         cmd.Parameters.AddWithValue("@Username", loginModel.Username);
 
@@ -90,7 +95,13 @@ namespace SchoolManagementAPI.Controllers
                                 string storedHash = reader["Password"].ToString();
                                 if (BCrypt.Net.BCrypt.Verify(loginModel.Password, storedHash))
                                 {
-                                    return Ok("Parent login successful.");
+                                    Parent parent = new Parent
+                                    {
+                                        Id = Convert.ToInt32(reader["Id"]),
+                                        Username = loginModel.Username
+                                    };
+                                    string token = CreateToken(parent);
+                                    return Ok(new { message = "successful loggedin", token });
                                 }
                                 else
                                 {
@@ -109,6 +120,25 @@ namespace SchoolManagementAPI.Controllers
             {
                 return StatusCode(StatusCodes.Status500InternalServerError, "Error: " + ex.Message);
             }
+        }
+
+        private string CreateToken(Parent parent)
+        {
+            List<Claim> claims = new List<Claim> {
+                new Claim(ClaimTypes.Name, parent.Username)
+            };
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration.GetSection("AppSettings:Token").Value));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
+
+            var token = new JwtSecurityToken(
+                claims: claims,
+                expires: DateTime.Now.AddDays(1),
+                signingCredentials: creds
+            );
+
+            var jwt = new JwtSecurityTokenHandler().WriteToken(token);
+            return jwt;
         }
     }
 }
