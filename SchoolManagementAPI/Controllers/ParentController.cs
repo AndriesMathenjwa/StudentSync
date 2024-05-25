@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.Authorization;
 
 namespace SchoolManagementAPI.Controllers
 {
@@ -132,6 +133,53 @@ namespace SchoolManagementAPI.Controllers
                         }
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "Error: " + ex.Message);
+            }
+        }
+
+        [HttpGet("parents")]
+        [Authorize(Roles = "Admin")]
+        public IActionResult GetAllParents()
+        {
+            try
+            {
+                string connectionString = _configuration.GetConnectionString("ConStr");
+                List<Parent> parents = new List<Parent>();
+
+                using (SqlConnection con = new SqlConnection(connectionString))
+                {
+                    con.Open();
+
+                    using (SqlCommand cmd = new SqlCommand("SELECT * FROM Parent", con))
+                    {
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                Parent parent = new Parent
+                                {
+                                    Id = Convert.ToInt32(reader["Id"]),
+                                    ParentIdNumber = reader["ParentIdNumber"].ToString(),
+                                    FirstName = reader["FirstName"].ToString(),
+                                    LastName = reader["LastName"].ToString(),
+                                    Email = reader["Email"].ToString(),
+                                    RelationshipToStudent = reader["RelationshipToStudent"].ToString(),
+                                    Address = reader["Address"].ToString(),
+                                    Username = reader["Username"].ToString(),
+                                    Password = reader["Password"].ToString()
+
+                                };
+
+                                parents.Add(parent);
+                            }
+                        }
+                    }
+                }
+
+                return Ok(parents);
             }
             catch (Exception ex)
             {

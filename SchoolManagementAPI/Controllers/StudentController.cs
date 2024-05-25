@@ -193,6 +193,158 @@ namespace SchoolManagementAPI.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, "Error: " + ex.Message);
             }
         }
+
+        [HttpGet("student/{id}")]
+        public IActionResult GetStudentById(int id)
+        {
+            try
+            {
+                string connectionString = _configuration.GetConnectionString("ConStr");
+                Student student = null;
+
+                using (SqlConnection con = new SqlConnection(connectionString))
+                {
+                    con.Open();
+
+                    using (SqlCommand cmd = new SqlCommand("SELECT * FROM Student WHERE Id=@Id", con))
+                    {
+                        cmd.Parameters.AddWithValue("@Id", id);
+
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                student = new Student
+                                {
+                                    Id = Convert.ToInt32(reader["Id"]),
+                                    IdNumber = reader["IdNumber"].ToString(),
+                                    FirstName = reader["FirstName"].ToString(),
+                                    LastName = reader["LastName"].ToString(),
+                                    Email = reader["Email"].ToString(),
+                                    DateOfBirth = Convert.ToDateTime(reader["DateOfBirth"]),
+                                    Sex = reader["Sex"].ToString(),
+                                    StudentNumber = reader["StudentNumber"].ToString(),
+                                    ProfilePicture = reader["ProfilePicture"].ToString(),
+                                    Grade = reader["Grade"].ToString(),
+                                    Username = reader["Username"].ToString(),
+                                    Password = reader["Password"].ToString(),
+                                    ParentId = Convert.ToInt32(reader["ParentId"]),
+                                };
+                            }
+                        }
+                    }
+                }
+
+                if (student == null)
+                {
+                    return NotFound("Student not found.");
+                }
+
+                return Ok(student);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "Error: " + ex.Message);
+            }
+        }
+
+
+        [HttpPut("update")]
+        public IActionResult UpdateStudent(Student student)
+        {
+            try
+            {
+                string connectionString = _configuration.GetConnectionString("ConStr");
+                using (SqlConnection con = new SqlConnection(connectionString))
+                {
+                    con.Open();
+
+                    // Fetch RoleId based on RoleName
+                    int roleId;
+                    using (SqlCommand roleCmd = new SqlCommand("SELECT Id FROM Roles WHERE RoleName=@RoleName", con))
+                    {
+                        roleCmd.Parameters.AddWithValue("@RoleName", student.RoleName);
+                        object result = roleCmd.ExecuteScalar();
+                        if (result == null)
+                        {
+                            return BadRequest("Invalid role name.");
+                        }
+                        roleId = (int)result;
+                    }
+
+                    using (SqlCommand cmd = new SqlCommand(
+                        "UPDATE Student SET IdNumber=@IdNumber, FirstName=@FirstName, LastName=@LastName, Email=@Email, " +
+                        "DateOfBirth=@DOB, Sex=@Sex, StudentNumber=@StudentNumber, ProfilePicture=@ProfilePicture, " +
+                        "Grade=@Grade, Username=@Username, Password=@Password, ParentId=@ParentId, RoleId=@RoleId " +
+                        "WHERE Id=@Id", con))
+                    {
+                        cmd.Parameters.AddWithValue("@Id", student.Id);
+                        cmd.Parameters.AddWithValue("@IdNumber", student.IdNumber);
+                        cmd.Parameters.AddWithValue("@FirstName", student.FirstName);
+                        cmd.Parameters.AddWithValue("@LastName", student.LastName);
+                        cmd.Parameters.AddWithValue("@Email", student.Email);
+                        cmd.Parameters.AddWithValue("@DOB", student.DateOfBirth);
+                        cmd.Parameters.AddWithValue("@Sex", student.Sex);
+                        cmd.Parameters.AddWithValue("@StudentNumber", student.StudentNumber);
+                        cmd.Parameters.AddWithValue("@ProfilePicture", student.ProfilePicture);
+                        cmd.Parameters.AddWithValue("@Grade", student.Grade);
+                        cmd.Parameters.AddWithValue("@Username", student.Username);
+                        cmd.Parameters.AddWithValue("@Password", BCrypt.Net.BCrypt.HashPassword(student.Password));
+                        cmd.Parameters.AddWithValue("@ParentId", student.ParentId);
+                        cmd.Parameters.AddWithValue("@RoleId", roleId);
+                        //cmd.Parameters.AddWithValue("@RoleId", student.RoleId); // Assuming RoleId is directly provided
+
+                        int rowsAffected = cmd.ExecuteNonQuery();
+                        if (rowsAffected > 0)
+                        {
+                            return Ok("Student updated successfully.");
+                        }
+                        else
+                        {
+                            return NotFound("Student not found.");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "Error: " + ex.Message);
+            }
+        }
+
+        [HttpDelete("delete/{id}")]
+        [Authorize(Roles = "Admin")]
+        public IActionResult DeleteStudent(int id)
+        {
+            try
+            {
+                string connectionString = _configuration.GetConnectionString("ConStr");
+                using (SqlConnection con = new SqlConnection(connectionString))
+                {
+                    con.Open();
+
+                    using (SqlCommand cmd = new SqlCommand("DELETE FROM Student WHERE Id=@Id", con))
+                    {
+                        cmd.Parameters.AddWithValue("@Id", id);
+
+                        int rowsAffected = cmd.ExecuteNonQuery();
+                        if (rowsAffected > 0)
+                        {
+                            return Ok("Student deleted successfully.");
+                        }
+                        else
+                        {
+                            return NotFound("Student not found.");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "Error: " + ex.Message);
+            }
+        }
+
         private string CreateToken(Student student)
         {
             List<Claim> claims = new List<Claim> {

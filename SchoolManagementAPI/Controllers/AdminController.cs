@@ -133,9 +133,53 @@ namespace SchoolManagementAPI.Controllers
             }
         }
 
+        [HttpGet("admins")]
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+        public IActionResult GetAllAdmins()
+        {
+            try
+            {
+                string connectionString = _configuration.GetConnectionString("ConStr");
+                List<Admin> admins = new List<Admin>();
+
+                using (SqlConnection con = new SqlConnection(connectionString))
+                {
+                    con.Open();
+
+                    using (SqlCommand cmd = new SqlCommand("SELECT * FROM Admin", con))
+                    {
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                Admin admin = new Admin
+                                {
+                                    Id = Convert.ToInt32(reader["Id"]),
+                                    FirstName = reader["FirstName"].ToString(),
+                                    LastName = reader["LastName"].ToString(),
+                                    Email = reader["Email"].ToString(),
+                                    Username = reader["Username"].ToString(),
+                                    Password = reader["Password"].ToString()
+
+                                };
+
+                                admins.Add(admin);
+                            }
+                        }
+                    }
+                }
+
+                return Ok(admins);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "Error: " + ex.Message);
+            }
+        }
 
 
-        private string CreateToken(Admin admin)
+
+            private string CreateToken(Admin admin)
         {
             List<Claim> claims = new List<Claim> {
                 new Claim(ClaimTypes.Name, admin.Username),
