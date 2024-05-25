@@ -42,7 +42,20 @@ namespace SchoolManagementAPI.Controllers
                         }
                     }
 
-                    using (SqlCommand cmd = new SqlCommand("INSERT INTO Admin (FirstName, LastName, Email, ContactDetails, Username, Password) VALUES ( @FirstName, @LastName, @Email, @ContactDetails, @Username, @Password)", con))
+                    // Fetch RoleId based on RoleName
+                    int roleId;
+                    using (SqlCommand roleCmd = new SqlCommand("SELECT Id FROM Roles WHERE RoleName=@RoleName", con))
+                    {
+                        roleCmd.Parameters.AddWithValue("@RoleName", admin.RoleName);
+                        object result = roleCmd.ExecuteScalar();
+                        if (result == null)
+                        {
+                            return BadRequest("Invalid role name.");
+                        }
+                        roleId = (int)result;
+                    }
+
+                    using (SqlCommand cmd = new SqlCommand("INSERT INTO Admin (FirstName, LastName, Email, ContactDetails, Username, Password, RoleId) VALUES (@FirstName, @LastName, @Email, @ContactDetails, @Username, @Password, @RoleId)", con))
                     {
                         cmd.Parameters.AddWithValue("@FirstName", admin.FirstName);
                         cmd.Parameters.AddWithValue("@LastName", admin.LastName);
@@ -50,6 +63,7 @@ namespace SchoolManagementAPI.Controllers
                         cmd.Parameters.AddWithValue("@ContactDetails", admin.ContactDetails);
                         cmd.Parameters.AddWithValue("@Username", admin.Username);
                         cmd.Parameters.AddWithValue("@Password", BCrypt.Net.BCrypt.HashPassword(admin.Password));
+                        cmd.Parameters.AddWithValue("@RoleId", roleId);
 
                         int rowsAffected = cmd.ExecuteNonQuery();
                         if (rowsAffected > 0)
@@ -69,8 +83,9 @@ namespace SchoolManagementAPI.Controllers
             }
         }
 
+
         [HttpPost("login")]
-        public IActionResult LoginParent(ParentLoginModel loginModel)
+        public IActionResult LoginAdmin(AdminLoginModel loginModel)
         {
             try
             {
@@ -78,7 +93,8 @@ namespace SchoolManagementAPI.Controllers
                 using (SqlConnection con = new SqlConnection(connectionString))
                 {
                     con.Open();
-                    using (SqlCommand cmd = new SqlCommand("SELECT Id, Password FROM Admin WHERE Username=@Username", con))
+                    using (SqlCommand cmd = new SqlCommand("SELECT a.Id, a.Password, r.RoleName FROM Admin a"+
+                        " INNER JOIN Roles r ON a.RoleId = r.Id WHERE a.Username=@Username", con))
                     {
                         cmd.Parameters.AddWithValue("@Username", loginModel.Username);
 
@@ -92,7 +108,8 @@ namespace SchoolManagementAPI.Controllers
                                     Admin admin = new Admin
                                     {
                                         Id = Convert.ToInt32(reader["Id"]),
-                                        Username = loginModel.Username
+                                        Username = loginModel.Username,
+                                        RoleName = reader["RoleName"].ToString()
                                     };
                                     string token = CreateToken(admin);
                                     return Ok(new { message = "successful loggedin", token });
@@ -116,10 +133,13 @@ namespace SchoolManagementAPI.Controllers
             }
         }
 
+
+
         private string CreateToken(Admin admin)
         {
             List<Claim> claims = new List<Claim> {
-                new Claim(ClaimTypes.Name, admin.Username)
+                new Claim(ClaimTypes.Name, admin.Username),
+                new Claim(ClaimTypes.Role, admin.RoleName)
             };
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration.GetSection("AppSettings:Token").Value));

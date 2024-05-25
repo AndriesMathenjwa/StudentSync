@@ -9,5 +9,6 @@
         public string? Email { get; set; }
         public string? ContactDetails { get; set; }
         public string? Password { get; set; }
+        public string? RoleName { get; set; }
     }
 }

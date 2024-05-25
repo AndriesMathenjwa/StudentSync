@@ -45,7 +45,20 @@ namespace SchoolManagementAPI.Controllers
                         }
                     }
 
-                    using (SqlCommand cmd = new SqlCommand("INSERT INTO Parent (ParentIdNumber, FirstName, LastName, Email, RelationshipToStudent, ContactDetails, Address, Username, Password) VALUES (@ParentIdNumber, @FirstName, @LastName, @Email, @RelationshipToStudent, @ContactDetails, @Address, @Username, @Password)", con))
+                    // Fetch RoleId based on RoleName
+                    int roleId;
+                    using (SqlCommand roleCmd = new SqlCommand("SELECT Id FROM Roles WHERE RoleName=@RoleName", con))
+                    {
+                        roleCmd.Parameters.AddWithValue("@RoleName", parent.RoleName);
+                        object result = roleCmd.ExecuteScalar();
+                        if (result == null)
+                        {
+                            return BadRequest("Invalid role name.");
+                        }
+                        roleId = (int)result;
+                    }
+
+                    using (SqlCommand cmd = new SqlCommand("INSERT INTO Parent (ParentIdNumber, FirstName, LastName, Email, RelationshipToStudent, ContactDetails, Address, Username, Password, RoleId) VALUES (@ParentIdNumber, @FirstName, @LastName, @Email, @RelationshipToStudent, @ContactDetails, @Address, @Username, @Password, @RoleId)", con))
                     {
                         cmd.Parameters.AddWithValue("@ParentIdNumber", parent.ParentIdNumber);
                         cmd.Parameters.AddWithValue("@FirstName", parent.FirstName);
@@ -56,6 +69,7 @@ namespace SchoolManagementAPI.Controllers
                         cmd.Parameters.AddWithValue("@Address", parent.Address);
                         cmd.Parameters.AddWithValue("@Username", parent.Username);
                         cmd.Parameters.AddWithValue("@Password", BCrypt.Net.BCrypt.HashPassword(parent.Password));
+                        cmd.Parameters.AddWithValue("@RoleId", roleId);
 
                         int rowsAffected = cmd.ExecuteNonQuery();
                         if (rowsAffected > 0)
@@ -75,6 +89,7 @@ namespace SchoolManagementAPI.Controllers
             }
         }
 
+
         [HttpPost("login")]
         public IActionResult LoginParent(ParentLoginModel loginModel)
         {
@@ -84,7 +99,8 @@ namespace SchoolManagementAPI.Controllers
                 using (SqlConnection con = new SqlConnection(connectionString))
                 {
                     con.Open();
-                    using (SqlCommand cmd = new SqlCommand("SELECT Id, Password FROM Parent WHERE Username=@Username", con))
+                    using (SqlCommand cmd = new SqlCommand("SELECT p.Id, p.Password, r.RoleName FROM Parent p " +
+                        "INNER JOIN Roles r ON p.RoleId = r.Id WHERE p.Username=@Username", con))
                     {
                         cmd.Parameters.AddWithValue("@Username", loginModel.Username);
 
@@ -98,10 +114,11 @@ namespace SchoolManagementAPI.Controllers
                                     Parent parent = new Parent
                                     {
                                         Id = Convert.ToInt32(reader["Id"]),
-                                        Username = loginModel.Username
+                                        Username = loginModel.Username,
+                                        RoleName = reader["RoleName"].ToString()
                                     };
                                     string token = CreateToken(parent);
-                                    return Ok(new { message = "successful loggedin", token });
+                                    return Ok(new { message = "Successfully logged in", token });
                                 }
                                 else
                                 {
@@ -125,7 +142,8 @@ namespace SchoolManagementAPI.Controllers
         private string CreateToken(Parent parent)
         {
             List<Claim> claims = new List<Claim> {
-                new Claim(ClaimTypes.Name, parent.Username)
+                new Claim(ClaimTypes.Name, parent.Username),
+                new Claim(ClaimTypes.Role, parent.RoleName)
             };
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration.GetSection("AppSettings:Token").Value));

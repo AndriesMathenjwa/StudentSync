@@ -14,6 +14,8 @@
         public string? Grade { get; set; }
         public string? Username { get; set; }
         public string? Password { get; set; }
-        public int? ParentId { get; set; }  // Ensure ParentId is an integer
+        public int? ParentId { get; set; }
+        public string? RoleName { get; set; }
+
     }
 }
