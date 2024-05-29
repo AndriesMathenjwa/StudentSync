@@ -141,7 +141,7 @@ namespace SchoolManagementAPI.Controllers
         }
 
         [HttpGet("parents")]
-        [Authorize(Roles = "Admin")]
+        //[Authorize(Roles = "Admin")]
         public IActionResult GetAllParents()
         {
             try
@@ -186,6 +186,147 @@ namespace SchoolManagementAPI.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, "Error: " + ex.Message);
             }
         }
+
+        [HttpGet("parent/{id}")]
+        public IActionResult GetStudentById(int id)
+        {
+            try
+            {
+                string connectionString = _configuration.GetConnectionString("ConStr");
+                Parent parent = null;
+
+                using (SqlConnection con = new SqlConnection(connectionString))
+                {
+                    con.Open();
+
+                    using (SqlCommand cmd = new SqlCommand("SELECT * FROM Parent WHERE Id=@Id", con))
+                    {
+                        cmd.Parameters.AddWithValue("@Id", id);
+
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                parent = new Parent
+                                {
+                                    Id = Convert.ToInt32(reader["Id"]),
+                                    ParentIdNumber = reader["ParentIdNumber"].ToString(),
+                                    FirstName = reader["FirstName"].ToString(),
+                                    LastName = reader["LastName"].ToString(),
+                                    Email = reader["Email"].ToString(),
+                                    RelationshipToStudent = reader["RelationshipToStudent"].ToString(),
+                                    Address = reader["Address"].ToString(),
+                                    Username = reader["Username"].ToString(),
+                                    Password = reader["Password"].ToString()
+                                };
+                            }
+                        }
+                    }
+                }
+
+                if (parent == null)
+                {
+                    return NotFound("Student not found.");
+                }
+
+                return Ok(parent);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "Error: " + ex.Message);
+            }
+        }
+
+        [HttpPut("update")]
+        public IActionResult UpdateStudent(Parent parent)
+        {
+            try
+            {
+                string connectionString = _configuration.GetConnectionString("ConStr");
+                using (SqlConnection con = new SqlConnection(connectionString))
+                {
+                    con.Open();
+
+                    // Fetch RoleId based on RoleName
+                    int roleId;
+                    using (SqlCommand roleCmd = new SqlCommand("SELECT Id FROM Roles WHERE RoleName=@RoleName", con))
+                    {
+                        roleCmd.Parameters.AddWithValue("@RoleName", parent.RoleName);
+                        object result = roleCmd.ExecuteScalar();
+                        if (result == null)
+                        {
+                            return BadRequest("Invalid role name.");
+                        }
+                        roleId = (int)result;
+                    }
+
+                    using (SqlCommand cmd = new SqlCommand(
+                        "UPDATE Parent SET ParentIdNumber=@ParentIdNumber, FirstName=@FirstName, LastName=@LastName, Email=@Email, " +
+                        "RelationshipToStudent=@RelationshipToStudent, Address=@Address, Username=@Username, Password=@Password, RoleId=@RoleId " +
+                        "WHERE Id=@Id", con))
+                    {
+                        cmd.Parameters.AddWithValue("@Id", parent.Id);
+                        cmd.Parameters.AddWithValue("@ParentIdNumber", parent.ParentIdNumber);
+                        cmd.Parameters.AddWithValue("@FirstName", parent.FirstName);
+                        cmd.Parameters.AddWithValue("@LastName", parent.LastName);
+                        cmd.Parameters.AddWithValue("@Email", parent.Email);
+                        cmd.Parameters.AddWithValue("@RelationshipToStudent", parent.RelationshipToStudent);
+                        cmd.Parameters.AddWithValue("@Address", parent.Address);
+                        cmd.Parameters.AddWithValue("@Username", parent.Username);
+                        cmd.Parameters.AddWithValue("@Password", BCrypt.Net.BCrypt.HashPassword(parent.Password));
+                        cmd.Parameters.AddWithValue("@RoleId", roleId);
+
+                        int rowsAffected = cmd.ExecuteNonQuery();
+                        if (rowsAffected > 0)
+                        {
+                            return Ok("Parent updated successfully.");
+                        }
+                        else
+                        {
+                            return NotFound("Parent not found.");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "Error: " + ex.Message);
+            }
+        }
+
+        [HttpDelete("delete/{id}")]
+        //[Authorize(Roles = "Admin")]
+        public IActionResult DeleteStudent(int id)
+        {
+            try
+            {
+                string connectionString = _configuration.GetConnectionString("ConStr");
+                using (SqlConnection con = new SqlConnection(connectionString))
+                {
+                    con.Open();
+
+                    using (SqlCommand cmd = new SqlCommand("DELETE FROM Parent WHERE Id=@Id", con))
+                    {
+                        cmd.Parameters.AddWithValue("@Id", id);
+
+                        int rowsAffected = cmd.ExecuteNonQuery();
+                        if (rowsAffected > 0)
+                        {
+                            return Ok("Parent deleted successfully.");
+                        }
+                        else
+                        {
+                            return NotFound("Parent not found.");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "Error: " + ex.Message);
+            }
+        }
+
 
         private string CreateToken(Parent parent)
         {

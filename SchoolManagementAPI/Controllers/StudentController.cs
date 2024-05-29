@@ -145,7 +145,7 @@ namespace SchoolManagementAPI.Controllers
         }
 
         [HttpGet("students")]
-        [Authorize(Roles = "Admin")]
+        //[Authorize(Roles = "Admin")]
         public IActionResult GetAllStudents()
         {
             try
